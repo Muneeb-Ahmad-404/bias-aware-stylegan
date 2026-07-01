@@ -1,11 +1,22 @@
-# Python-generated files
+# Python
 __pycache__/
-*.py[oc]
+*.py[cod]
+.venv/
+venv/
 build/
 dist/
 wheels/
-data/
 *.egg-info
 
-# Virtual environments
-.venv
+# IDE
+.vscode/
+
+# Environment
+.env
+
+# Notebook
+.ipynb_checkpoints/
+
+# Local data (DVC will manage these)
+data/
+reports/
