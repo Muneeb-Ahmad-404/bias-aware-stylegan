@@ -1,12 +1,11 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 set -e
 
 echo "Installing dependencies..."
 
-pip install uv
+python -m pip install --upgrade uv
 uv sync
-
 
 echo "Configuring Git..."
 
@@ -18,27 +17,22 @@ git remote set-url origin https://${GITHUB_TOKEN}@github.com/Muneeb-Ahmad-404/bi
 
 echo "Configuring DVC remote..."
 
-dvc remote modify --local origin_raw auth basic
-dvc remote modify --local origin_raw user "$DAGSHUB_USERNAME"
-dvc remote modify --local origin_raw password "$DAGSHUB_TOKEN"
+uv run dvc remote modify --local origin_processed auth basic
+uv run dvc remote modify --local origin_processed user "$DAGSHUB_USERNAME"
+uv run dvc remote modify --local origin_processed password "$DAGSHUB_TOKEN"
 
-
-echo "Creating project directories..."
+echo "Creating directories..."
 
 mkdir -p data/raw
 mkdir -p data/processed
 mkdir -p data/cleaned
 mkdir -p data/splits
-mkdir -p reports
 
 
 echo "Verifying setup..."
 
-echo "Git remote:"
 git remote -v
+uv run dvc --version
+uv run dvc remote list
 
-echo "DVC remotes:"
-dvc remote list
-
-
-echo "Colab setup completed successfully."
+echo "Setup completed successfully."
