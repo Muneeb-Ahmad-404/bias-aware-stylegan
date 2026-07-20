@@ -1,23 +1,31 @@
 # Python-generated files
 __pycache__/
-*.py[oc]
+*.py[cod]
 build/
 dist/
 wheels/
-*.egg-info
+*.egg-info/
+.mypy_cache/
+.pytest_cache/
 
 # DVC local configuration
 .dvc/config.local
+.dvc/cache/
+.dvc/tmp/
 
 # Jupyter / Colab
 .ipynb_checkpoints/
 *.ipynb
 
 # Virtual environments
-.venv
+.venv/
+venv/
 
-#Environment files
+# Environment files
 .env
 
-#Datasets
+# Datasets managed by DVC
 data/raw/
+data/processed/
+data/cleaned/
+data/splits/
