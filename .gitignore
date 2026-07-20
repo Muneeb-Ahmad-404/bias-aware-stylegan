@@ -1,18 +1,23 @@
-# Python
+# Python-generated files
 __pycache__/
-*.py[cod]
-.venv/
-venv/
+*.py[oc]
 build/
 dist/
 wheels/
 *.egg-info
 
-# IDE
-.vscode/
+# DVC local configuration
+.dvc/config.local
 
-# Environment
+# Jupyter / Colab
+.ipynb_checkpoints/
+*.ipynb
+
+# Virtual environments
+.venv
+
+#Environment files
 .env
 
-# Notebook
-.ipynb_checkpoints/
+#Datasets
+data/raw/
