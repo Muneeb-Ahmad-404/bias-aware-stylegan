@@ -1,0 +1,11 @@
+datasets:
+  isic:
+    name: isic2020
+    kaggle: sarques/siimisic-melanoma-512-resized-images
+
+  fitzpatrick:
+    name: fitzpatrick17k
+    kaggle: twilightconan/fitzpatrick17k-512x512
+
+paths:
+  raw: data/raw

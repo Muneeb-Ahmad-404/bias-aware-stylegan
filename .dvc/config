@@ -1,4 +1,4 @@
 [core]
-    remote = origin_raw
-['remote "origin_raw"']
-    url = https://dagshub.com/Muneeb-Ahmad-404/raw-data
+    remote = origin_processed
+['remote "origin_processed"']
+    url = https://dagshub.com/muneeb-ahmad/processed-data.dvc
