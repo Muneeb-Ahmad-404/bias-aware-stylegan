@@ -16,7 +16,3 @@ wheels/
 
 # Notebook
 .ipynb_checkpoints/
-
-# Local data (DVC will manage these)
-data/
-reports/

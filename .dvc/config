@@ -1,0 +1,4 @@
+[core]
+    remote = origin_raw
+['remote "origin_raw"']
+    url = https://dagshub.com/Muneeb-Ahmad-404/raw-data
