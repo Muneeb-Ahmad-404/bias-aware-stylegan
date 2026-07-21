@@ -105,7 +105,7 @@ dvc remote modify --local origin_raw password <DagsHub-access-token>
 
 For running data processing tasks on Google Colab, refer to:
 
-[Google Colab Setup](docs/colab_setup.md)
+[Google Colab Setup](docs/setup/colab_setup.md)
 
 The Colab setup guide covers:
 
