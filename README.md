@@ -204,6 +204,7 @@ Current implementation:
 * DagsHub remote storage setup
 * Google Colab environment setup
 * Dataset ingestion
+* Dataset Validation (structure, image, and metadata consistency checks)
 
 Future stages:
 
