@@ -1,0 +1,46 @@
+{
+    "isic": {
+        "train": {
+            "image_count": 33126,
+            "corrupted_images": 0,
+            "resolutions": {
+                "512x512": 33126
+            },
+            "csv_rows": 33126,
+            "count_matches_csv": true,
+            "metadata_mapping": {
+                "images_without_metadata": [],
+                "metadata_without_images": [],
+                "mapping_valid": true
+            }
+        },
+        "test": {
+            "image_count": 10982,
+            "corrupted_images": 0,
+            "resolutions": {
+                "512x512": 10982
+            },
+            "csv_rows": 10982,
+            "count_matches_csv": true,
+            "metadata_mapping": {
+                "images_without_metadata": [],
+                "metadata_without_images": [],
+                "mapping_valid": true
+            }
+        }
+    },
+    "fitzpatrick": {
+        "image_count": 16577,
+        "corrupted_images": 0,
+        "resolutions": {
+            "512x512": 16577
+        },
+        "csv_rows": 16577,
+        "count_matches_csv": true,
+        "metadata_mapping": {
+            "images_without_metadata": [],
+            "metadata_without_images": [],
+            "mapping_valid": true
+        }
+    }
+}
