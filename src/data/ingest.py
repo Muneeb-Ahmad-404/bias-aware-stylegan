@@ -1,7 +1,8 @@
-from pathlib import Path
 import shutil
-import yaml
+from pathlib import Path
+
 import kagglehub
+import yaml
 
 
 class DatasetIngestor:
@@ -18,11 +19,7 @@ class DatasetIngestor:
     def download_dataset(self, dataset_name, dataset_config):
         print(f"Downloading {dataset_name}")
 
-        downloaded_path = Path(
-            kagglehub.dataset_download(
-                dataset_config["kaggle"]
-            )    
-        )
+        downloaded_path = Path(kagglehub.dataset_download(dataset_config["kaggle"]))
 
         destination = self.raw_path / dataset_config["name"]
 
@@ -30,11 +27,7 @@ class DatasetIngestor:
             print(f"{destination} already exists")
             return
 
-        shutil.copytree(
-            downloaded_path,
-            destination,
-            dirs_exist_ok=True
-        )
+        shutil.copytree(downloaded_path, destination, dirs_exist_ok=True)
 
         print(f"Saved to {destination}")
 
@@ -44,8 +37,6 @@ class DatasetIngestor:
 
 
 if __name__ == "__main__":
-    ingestor = DatasetIngestor(
-        "configs/config.yaml"
-    )
+    ingestor = DatasetIngestor("configs/config.yaml")
 
     ingestor.run()

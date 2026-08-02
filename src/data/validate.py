@@ -1,8 +1,8 @@
-from pathlib import Path
 import json
+from pathlib import Path
 
-import yaml
 import pandas as pd
+import yaml
 from PIL import Image
 
 
@@ -37,9 +37,7 @@ class DatasetValidator:
                 with Image.open(image_path) as image:
                     resolution = f"{image.width}x{image.height}"
 
-                resolutions[resolution] = (
-                    resolutions.get(resolution, 0) + 1
-                )
+                resolutions[resolution] = resolutions.get(resolution, 0) + 1
 
             except Exception:
                 corrupted += 1
@@ -48,158 +46,84 @@ class DatasetValidator:
             "image_count": len(images),
             "corrupted_images": corrupted,
             "resolutions": resolutions,
-            "image_paths": images
+            "image_paths": images,
         }
 
     def validate_csv(self, csv_path: Path):
         if not csv_path.exists():
-            return {
-                "exists": False,
-                "rows": 0,
-                "dataframe": None
-            }
+            return {"exists": False, "rows": 0, "dataframe": None}
 
         dataframe = pd.read_csv(csv_path)
 
-        return {
-            "exists": True,
-            "rows": len(dataframe),
-            "dataframe": dataframe
-        }
+        return {"exists": True, "rows": len(dataframe), "dataframe": dataframe}
 
-    def validate_metadata_mapping(
-        self,
-        image_paths,
-        dataframe,
-        image_column
-    ):
+    def validate_metadata_mapping(self, image_paths, dataframe, image_column):
         if dataframe is None:
-            return {
-                "mapping_valid": False,
-                "reason": "CSV not found"
-            }
+            return {"mapping_valid": False, "reason": "CSV not found"}
 
         if image_column not in dataframe.columns:
-            return {
-                "mapping_valid": False,
-                "reason": f"Missing column: {image_column}"
-            }
+            return {"mapping_valid": False, "reason": f"Missing column: {image_column}"}
 
-        image_ids = {
-            image.stem
-            for image in image_paths
-        }
+        image_ids = {image.stem for image in image_paths}
 
-        csv_ids = {
-            str(value).replace(".jpg", "")
-            for value in dataframe[image_column]
-        }
+        csv_ids = {str(value).replace(".jpg", "") for value in dataframe[image_column]}
 
         return {
-            "images_without_metadata": list(
-                image_ids - csv_ids
-            ),
-
-            "metadata_without_images": list(
-                csv_ids - image_ids
-            ),
-
-            "mapping_valid": image_ids == csv_ids
+            "images_without_metadata": list(image_ids - csv_ids),
+            "metadata_without_images": list(csv_ids - image_ids),
+            "mapping_valid": image_ids == csv_ids,
         }
 
     def validate_isic(self):
-        dataset_path = (
-            self.raw_path /
-            self.config["datasets"]["isic"]["name"]
-        )
+        dataset_path = self.raw_path / self.config["datasets"]["isic"]["name"]
 
-        train_images = self.validate_image_folder(
-            dataset_path / "train"
-        )
+        train_images = self.validate_image_folder(dataset_path / "train")
 
-        test_images = self.validate_image_folder(
-            dataset_path / "test"
-        )
+        test_images = self.validate_image_folder(dataset_path / "test")
 
-        train_csv = self.validate_csv(
-            dataset_path / "train.csv"
-        )
+        train_csv = self.validate_csv(dataset_path / "train.csv")
 
-        test_csv = self.validate_csv(
-            dataset_path / "test.csv"
-        )
+        test_csv = self.validate_csv(dataset_path / "test.csv")
 
         self.results["isic"] = {
             "train": {
                 "image_count": train_images["image_count"],
                 "corrupted_images": train_images["corrupted_images"],
                 "resolutions": train_images["resolutions"],
-
                 "csv_rows": train_csv["rows"],
-
-                "count_matches_csv":
-                    train_images["image_count"]
-                    == train_csv["rows"],
-
-                "metadata_mapping":
-                    self.validate_metadata_mapping(
-                        train_images["image_paths"],
-                        train_csv["dataframe"],
-                        "image_name"
-                    )
+                "count_matches_csv": train_images["image_count"] == train_csv["rows"],
+                "metadata_mapping": self.validate_metadata_mapping(
+                    train_images["image_paths"], train_csv["dataframe"], "image_name"
+                ),
             },
-
             "test": {
                 "image_count": test_images["image_count"],
                 "corrupted_images": test_images["corrupted_images"],
                 "resolutions": test_images["resolutions"],
-
                 "csv_rows": test_csv["rows"],
-
-                "count_matches_csv":
-                    test_images["image_count"]
-                    == test_csv["rows"],
-
-                "metadata_mapping":
-                    self.validate_metadata_mapping(
-                        test_images["image_paths"],
-                        test_csv["dataframe"],
-                        "image"
-                    )
-            }
+                "count_matches_csv": test_images["image_count"] == test_csv["rows"],
+                "metadata_mapping": self.validate_metadata_mapping(
+                    test_images["image_paths"], test_csv["dataframe"], "image"
+                ),
+            },
         }
 
     def validate_fitzpatrick(self):
-        dataset_path = (
-            self.raw_path /
-            self.config["datasets"]["fitzpatrick"]["name"]
-        )
+        dataset_path = self.raw_path / self.config["datasets"]["fitzpatrick"]["name"]
 
-        images = self.validate_image_folder(
-            dataset_path / "data"
-        )
+        images = self.validate_image_folder(dataset_path / "data")
 
-        csv = self.validate_csv(
-            dataset_path / "fitzpatrick17k.csv"
-        )
+        csv = self.validate_csv(dataset_path / "fitzpatrick17k.csv")
 
         self.results["fitzpatrick"] = {
             "image_count": images["image_count"],
             "corrupted_images": images["corrupted_images"],
             "resolutions": images["resolutions"],
-
             "csv_rows": csv["rows"],
-
-            "count_matches_csv":
-                images["image_count"]
-                == csv["rows"],
-
-            "metadata_mapping":
-                self.validate_metadata_mapping(
-                    images["image_paths"],
-                    csv["dataframe"],
-                    "md5hash"
-                )
+            "count_matches_csv": images["image_count"] == csv["rows"],
+            "metadata_mapping": self.validate_metadata_mapping(
+                images["image_paths"], csv["dataframe"], "md5hash"
+            ),
         }
 
     def validate(self):
@@ -207,27 +131,16 @@ class DatasetValidator:
         self.validate_fitzpatrick()
 
     def save_report(self):
-        report_file = (
-            self.report_path /
-            "validation.json"
-        )
+        report_file = self.report_path / "validation.json"
 
         with open(report_file, "w") as file:
-            json.dump(
-                self.results,
-                file,
-                indent=4
-            )
+            json.dump(self.results, file, indent=4)
 
-        print(
-            f"Validation report saved: {report_file}"
-        )
+        print(f"Validation report saved: {report_file}")
 
 
 def main():
-    validator = DatasetValidator(
-        "configs/config.yaml"
-    )
+    validator = DatasetValidator("configs/config.yaml")
 
     validator.validate()
     validator.save_report()
