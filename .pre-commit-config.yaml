@@ -1,0 +1,25 @@
+files: |
+    (?x)^(
+        src/.*\.py
+        | scripts/.*\.py
+        | tests/.*\.py
+        | main\.py
+    )$
+
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.12.11
+    hooks:
+      - id: ruff
+        args: [--select, I, --fix]
+        types_or: [python, pyi, jupyter]
+
+      - id: ruff-format
+        types_or: [python, pyi, jupyter]
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.12.11
+    hooks:
+      - id: ruff
+        args: [--select, I, --fix]
+      - id: ruff-format
