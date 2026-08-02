@@ -1,0 +1,13 @@
+{
+    "isic": {
+        "original_samples": 33126,
+        "melanoma_samples": 584
+    },
+    "fitzpatrick17k": {
+        "original_samples": 16577,
+        "melanoma_samples": 490
+    },
+    "integrated_dataset": {
+        "total_samples": 1074
+    }
+}
