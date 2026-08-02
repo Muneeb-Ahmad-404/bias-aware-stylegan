@@ -2,9 +2,14 @@ datasets:
   isic:
     name: isic2020
     kaggle: twilightconan/siimisic-melanoma-512-resized-images-metadata
+    metadata: data/raw/isic2020/train.csv
+    image_dir: data/raw/isic2020/train
   fitzpatrick:
     name: fitzpatrick17k
     kaggle: twilightconan/fitzpatrick17k-512x512
+    metadata: data/raw/fitzpatrick17k/fitzpatrick17k.csv
+    image_dir: data/raw/fitzpatrick17k/data
 
 paths:
   raw: data/raw
+  integrated: data/integrated
