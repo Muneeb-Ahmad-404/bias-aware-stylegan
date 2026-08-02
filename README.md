@@ -205,11 +205,10 @@ Current implementation:
 * Google Colab environment setup
 * Dataset ingestion
 * Dataset Validation (structure, image, and metadata consistency checks)
+* Metadata Integration
 
 Future stages:
 
-* Preprocessing
-* Cleaning
 * Visualization
 * Splitting
 * Training
