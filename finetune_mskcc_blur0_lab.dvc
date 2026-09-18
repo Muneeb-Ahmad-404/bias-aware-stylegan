@@ -1,0 +1,6 @@
+outs:
+- md5: a294538909c98ec9075fb32d5d69b167.dir
+  size: 355218113
+  nfiles: 22
+  hash: md5
+  path: finetune_mskcc_blur0_lab

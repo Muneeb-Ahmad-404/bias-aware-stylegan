@@ -29,3 +29,8 @@ data/raw/
 data/processed/
 data/cleaned/
 data/splits/
+
+#  Model weights
+finetune_mskcc_blur0_lab/
+/finetune_mskcc_blur0_lab
+.dvc/tmp/
