@@ -2,12 +2,15 @@ from pathlib import Path
 import yaml
 import logging as logger
 import torchvision.models as models
+import torchvision.transforms as transforms
 import torch
 import torch.nn as nn
 import cv2 as cv
 from cv2.typing import MatLike
 import numpy as np
 import os
+import math
+from datetime import datetime
 
 class ItaInference:
     def __init__(self, config_path):
@@ -54,16 +57,16 @@ class ItaInference:
         logger.info(f"Found {len(images)} images to process.")
 
         # for testing
-        # test_images = [
-        #     'ISIC_9922133.jpg',
-        #     'ISIC_9922430.jpg',
-        #     'ISIC_9923018.jpg',
-        #     'ISIC_9886540.jpg',
-        #     'ISIC_9991451.jpg',
-        #     'ISIC_0068279.jpg',
-        # ]
+        test_images = [
+            'ISIC_9922133.jpg',
+            'ISIC_9922430.jpg',
+            'ISIC_9923018.jpg',
+            'ISIC_9886540.jpg',
+            'ISIC_9991451.jpg',
+            'ISIC_0068279.jpg',
+        ]
 
-        for img_name in images:
+        for img_name in test_images:
             img_path = self.path / img_name
             if not img_path.exists():
                 logger.warning(f"Image not found: {img_path}")
@@ -119,26 +122,181 @@ class ItaInference:
             return hair_free_img
         return hair_free_small
     
-    def get_prediction(self):
-        pass
+    def get_prediction(self, img_bgr):
+        # preprocess to pil
+        img_rgb = cv.cvtColor(img_bgr, cv.COLOR_BGR2RGB)
+        resized_image = cv.resize(img_rgb, (224, 224))
+        normalized_image = resized_image / 255.0
+        input_tensor = torch.tensor(normalized_image, dtype=torch.float32).permute(2, 0, 1)
+        normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+        input_tensor = normalize(input_tensor).unsqueeze(0)
 
-    def calculate_ita(self):
-        pass
+        outputs_list = []
 
-    def calculate_fitzscale(self):
-        pass
+        with torch.no_grad():
+            for model in self.models:
+                pred = model(input_tensor)
+                outputs_list.append(pred)
 
-    def lesion_mask(self): 
-        pass
+        final_prediction = torch.stack(outputs_list).mean(dim=0)
+        return final_prediction[0][0].item(), final_prediction[0][1].item(), final_prediction[0][2].item()
+        # return l, a, b
+    
+    def calculate_ita(self, l, b):
+        # Avoid division by zero in extreme edge cases
+        if b == 0:
+            b = 0.0001
+            
+        # Calculate the angle in radians
+        ratio = (l - 50) / b
+        ita_radians = math.atan(ratio)
+        
+        return ita_radians * (180 / math.pi)
+
+    def calculate_fitzscale(self, ita):
+        ita_bnd_kin = -1
+
+        if ita > 55:
+            ita_bnd_kin = 1
+        if 41 < ita <= 55:
+            ita_bnd_kin = 2
+        if 28 < ita <= 41:
+            ita_bnd_kin = 3
+        if 19 < ita <= 28:
+            ita_bnd_kin = 4
+        if 10 < ita <= 19:
+            ita_bnd_kin = 5
+        if ita <= 10:
+            ita_bnd_kin = 6
+
+        return ita_bnd_kin
 
     def run_inference(self):
+        results = []
+
         for img_name, img_bgr in self.load_images():
-            logger.info(f"Removing hair for {img_name}...")
-            hair_free_img = self.remove_hair_multiscale(img_bgr)
+            logger.info(f"Processing {img_name}...")
+
+            l, a, b = self.get_prediction(img_bgr)
+            ita_val = self.calculate_ita(l, b)
+            fitz_val = self.calculate_fitzscale(ita_val)
+
+            results.append({
+                "image": img_name,
+                "l": l,
+                "a": a,
+                "b": b,
+                "ita": ita_val,
+                "fitzpatrick": fitz_val,
+            })
+
+            logger.info(
+                f"{img_name}: L={l:.2f}, a={a:.2f}, "
+                f"b={b:.2f}, ITA={ita_val:.2f}, Fitz={fitz_val}"
+            )
 
             # Debug: Save it temporarily to verify
-            # cv.imwrite(f"debug_{img_name}", hair_free_img)
-        
+            # cv.imwrite(f"debug_{img_name}",  hair_free_img)
+
+        self.log_experiment(
+            results,
+            experiment_id="001",
+            title="Baseline ITA Inference",
+            objective=(
+                "Establish baseline skin-tone estimates using the pretrained "
+                "five-fold Lab regression models without additional preprocessing."
+            ),
+            change_from_previous="Initial baseline experiment.",
+            preprocessing=[
+                "BGR → RGB",
+                "Resize to 224×224",
+                "Convert pixel values to [0, 1]",
+                "ImageNet normalization",
+                "No lesion removal",
+                "No hair removal",
+                "No additional color processing",
+            ],
+        )
+
+    def log_experiment(
+        self,
+        results,
+        experiment_id,
+        title,
+        objective,
+        preprocessing,
+        change_from_previous,
+        observations="TODO",
+        next_experiment="TODO",
+    ):
+        log_dir = Path("reports/experiments/ita")
+        log_dir.mkdir(parents=True, exist_ok=True)
+
+        log_file = log_dir / f"{experiment_id}_{title.lower().replace(' ', '_')}.md"
+
+        with open(log_file, "w") as f:
+            f.write(f"# Experiment {experiment_id} — {title}\n\n")
+
+            f.write("## Objective\n\n")
+            f.write(f"{objective}\n\n")
+
+            f.write("## Date\n\n")
+            f.write(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
+
+            f.write("## Input\n\n")
+            f.write("- Dataset: ISIC 2020\n")
+            f.write("- Subset: current test images\n")
+            f.write(f"- Images processed: {len(results)}\n")
+            f.write(f"- Image directory: `{self.path}`\n")
+            f.write("- Original resolution: 512×512\n\n")
+
+            f.write("## Change from Previous Experiment\n\n")
+            f.write(f"{change_from_previous}\n\n")
+
+            f.write("## Preprocessing\n\n")
+            for step in preprocessing:
+                f.write(f"- {step}\n")
+            f.write("\n")
+
+            f.write("## Model\n\n")
+            f.write("- Architecture: EfficientNet-B4\n")
+            f.write("- Task: Lab regression\n")
+            f.write("- Output: L*, a*, b*\n")
+            f.write("- Number of folds: 5\n")
+            f.write("- Aggregation: mean L*, a*, b* across folds\n\n")
+
+            f.write("## ITA Calculation\n\n")
+            f.write("ITA = atan((L - 50) / b) × 180 / π\n\n")
+
+            f.write("## Fitzpatrick Mapping\n\n")
+            f.write("- ITA > 55 → I\n")
+            f.write("- 41 < ITA ≤ 55 → II\n")
+            f.write("- 28 < ITA ≤ 41 → III\n")
+            f.write("- 19 < ITA ≤ 28 → IV\n")
+            f.write("- 10 < ITA ≤ 19 → V\n")
+            f.write("- ITA ≤ 10 → VI\n\n")
+
+            f.write("## Results\n\n")
+            f.write("| Image | L* | a* | b* | ITA | Fitzpatrick |\n")
+            f.write("|---|---:|---:|---:|---:|---:|\n")
+
+            for result in results:
+                f.write(
+                    f"| {result['image']} | "
+                    f"{result['l']:.3f} | "
+                    f"{result['a']:.3f} | "
+                    f"{result['b']:.3f} | "
+                    f"{result['ita']:.3f} | "
+                    f"{result['fitzpatrick']} |\n"
+                )
+
+            f.write("\n## Observations\n\n")
+            f.write(f"{observations}\n\n")
+
+            f.write("## Decision / Next Experiment\n\n")
+            f.write(f"{next_experiment}\n")
+
 if __name__ == '__main__':
     ita = ItaInference('configs/config.yaml')
+    ita.load_models()
     ita.run_inference()
