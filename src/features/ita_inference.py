@@ -177,7 +177,9 @@ class ItaInference:
         for img_name, img_bgr in self.load_images():
             logger.info(f"Processing {img_name}...")
 
-            l, a, b = self.get_prediction(img_bgr)
+            hair_free_img = self.remove_hair_multiscale(img_bgr)
+
+            l, a, b = self.get_prediction(hair_free_img)
             ita_val = self.calculate_ita(l, b)
             fitz_val = self.calculate_fitzscale(ita_val)
 
@@ -200,21 +202,24 @@ class ItaInference:
 
         self.log_experiment(
             results,
-            experiment_id="001",
-            title="Baseline ITA Inference",
+            experiment_id="002",
+            title="Multiscale Hair Removal",
             objective=(
-                "Establish baseline skin-tone estimates using the pretrained "
-                "five-fold Lab regression models without additional preprocessing."
+                "Evaluate the effect of multiscale hair removal on skin-tone "
+                "estimation using the pretrained five-fold Lab regression models."
             ),
-            change_from_previous="Initial baseline experiment.",
+            change_from_previous=(
+                "Multiscale hair removal was introduced before model inference. "
+                "All other inference steps remain unchanged."
+            ),
             preprocessing=[
                 "BGR → RGB",
+                "Multiscale blackhat hair detection",
+                "Hair mask dilation",
+                "Telea inpainting",
                 "Resize to 224×224",
                 "Convert pixel values to [0, 1]",
                 "ImageNet normalization",
-                "No lesion removal",
-                "No hair removal",
-                "No additional color processing",
             ],
         )
 
