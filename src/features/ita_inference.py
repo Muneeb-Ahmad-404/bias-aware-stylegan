@@ -62,16 +62,16 @@ class ItaInference:
         logger.info(f"Found {len(images)} images to process.")
 
         # for testing
-        test_images = [
-            "ISIC_9922133.jpg",
-            "ISIC_9922430.jpg",
-            "ISIC_9923018.jpg",
-            "ISIC_9886540.jpg",
-            "ISIC_9991451.jpg",
-            "ISIC_0068279.jpg",
-        ]
+        # images = [
+        #     "ISIC_9922133.jpg",
+        #     "ISIC_9922430.jpg",
+        #     "ISIC_9923018.jpg",
+        #     "ISIC_9886540.jpg",
+        #     "ISIC_9991451.jpg",
+        #     "ISIC_0068279.jpg",
+        # ]
 
-        for img_name in test_images:
+        for img_name in images:
             img_path = self.path / img_name
             if not img_path.exists():
                 logger.warning(f"Image not found: {img_path}")
@@ -312,8 +312,8 @@ class ItaInference:
             )
 
             # Debug: Save it temporarily to verify
-            cv.imwrite(f"hair_free_{img_name}", hair_free_img)
-            cv.imwrite(f"skin_patch_{img_name}", clean_patch)
+            # cv.imwrite(f"hair_free_{img_name}", hair_free_img)
+            # cv.imwrite(f"skin_patch_{img_name}", clean_patch)
 
         # self.log_experiment(
         #     results,
@@ -348,84 +348,159 @@ class ItaInference:
 
     def log_experiment(
         self,
-        results,
         experiment_id,
         title,
         objective,
         preprocessing,
-        change_from_previous,
-        observations="TODO",
-        next_experiment="TODO",
+        results,
+        observations=None,
+        next_experiment=None,
     ):
-        log_dir = Path("reports/experiments/ita")
+        log_dir = Path("reports/experiments/ita/")
         log_dir.mkdir(parents=True, exist_ok=True)
 
-        log_file = log_dir / f"{experiment_id}_{title.lower().replace(' ', '_')}.md"
+        log_file = log_dir / f"{experiment_id}.md"
+
+        if log_file.exists():
+            logger.warning(f"Experiment {experiment_id} already exists. Skipping log.")
+            return
 
         with open(log_file, "w") as f:
             f.write(f"# Experiment {experiment_id} — {title}\n\n")
 
-            f.write("## Objective\n\n")
+            f.write("## Objective\n")
             f.write(f"{objective}\n\n")
 
-            f.write("## Date\n\n")
+            f.write("## Date\n")
             f.write(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
 
-            f.write("## Input\n\n")
-            f.write("- Dataset: ISIC 2020\n")
-            f.write("- Subset: current test images\n")
+            f.write("## Input\n")
+            f.write(f"- Dataset: ISIC 2020\n")
             f.write(f"- Images processed: {len(results)}\n")
-            f.write(f"- Image directory: `{self.path}`\n")
-            f.write("- Original resolution: 512×512\n\n")
+            f.write(f"- Image directory: `{self.path}`\n\n")
 
-            f.write("## Change from Previous Experiment\n\n")
-            f.write(f"{change_from_previous}\n\n")
-
-            f.write("## Preprocessing\n\n")
-            for step in preprocessing:
-                f.write(f"- {step}\n")
+            f.write("## Preprocessing\n")
+            for item in preprocessing:
+                f.write(f"- {item}\n")
             f.write("\n")
 
-            f.write("## Model\n\n")
-            f.write("- Architecture: EfficientNet-B4\n")
-            f.write("- Task: Lab regression\n")
-            f.write("- Output: L*, a*, b*\n")
-            f.write("- Number of folds: 5\n")
-            f.write("- Aggregation: mean L*, a*, b* across folds\n\n")
-
-            f.write("## ITA Calculation\n\n")
-            f.write("ITA = atan((L - 50) / b) × 180 / π\n\n")
-
-            f.write("## Fitzpatrick Mapping\n\n")
-            f.write("- ITA > 55 → I\n")
-            f.write("- 41 < ITA ≤ 55 → II\n")
-            f.write("- 28 < ITA ≤ 41 → III\n")
-            f.write("- 19 < ITA ≤ 28 → IV\n")
-            f.write("- 10 < ITA ≤ 19 → V\n")
-            f.write("- ITA ≤ 10 → VI\n\n")
-
             f.write("## Results\n\n")
-            f.write("| Image | L* | a* | b* | ITA | Fitzpatrick |\n")
-            f.write("|---|---:|---:|---:|---:|---:|\n")
 
-            for result in results:
-                f.write(
-                    f"| {result['image']} | "
-                    f"{result['l']:.3f} | "
-                    f"{result['a']:.3f} | "
-                    f"{result['b']:.3f} | "
-                    f"{result['ita']:.3f} | "
-                    f"{result['fitzpatrick']} |\n"
-                )
+            if results:
+                columns = list(results[0].keys())
 
-            f.write("\n## Observations\n\n")
-            f.write(f"{observations}\n\n")
+                f.write("| " + " | ".join(columns) + " |\n")
+                f.write("|" + "|".join(["---"] * len(columns)) + "|\n")
 
-            f.write("## Decision / Next Experiment\n\n")
-            f.write(f"{next_experiment}\n")
+                for result in results:
+                    values = []
 
+                    for column in columns:
+                        value = result[column]
+
+                        if isinstance(value, float):
+                            value = f"{value:.3f}"
+
+                        values.append(str(value))
+
+                    f.write("| " + " | ".join(values) + " |\n")
+
+            f.write("\n## Observations\n")
+            if observations:
+                for observation in observations:
+                    f.write(f"- {observation}\n")
+            else:
+                f.write("- TODO\n")
+
+            f.write("\n## Next Experiment\n")
+            if next_experiment:
+                f.write(f"- {next_experiment}\n")
+            else:
+                f.write("- TODO\n")
+            
+    def analyze_patch_color(self, patch):
+        rgb = cv.cvtColor(patch, cv.COLOR_BGR2RGB)
+        lab = cv.cvtColor(patch, cv.COLOR_BGR2LAB)
+
+        rgb_mean = np.mean(rgb, axis=(0, 1))
+        rgb_median = np.median(rgb, axis=(0, 1))
+
+        lab_mean = np.mean(lab, axis=(0, 1))
+        lab_median = np.median(lab, axis=(0, 1))
+
+        return {
+            "rgb_mean": rgb_mean,
+            "rgb_median": rgb_median,
+            "opencv_lab_mean": lab_mean,
+            "opencv_lab_median": lab_median,
+        }
+    
+    def run_patch_color_analysis(self):
+        results = []
+
+        for img_name, img_bgr in self.load_images():
+            logger.info(f"Analyzing {img_name}...")
+
+            hair_free_img = self.remove_hair_multiscale(img_bgr)
+            patch = self.extract_clean_patch(hair_free_img)
+
+            if patch is None:
+                logger.warning(f"{img_name}: no patch extracted")
+                continue
+
+            stats = self.analyze_patch_color(patch)
+
+            rgb_mean = stats["rgb_mean"]
+            rgb_median = stats["rgb_median"]
+            lab_mean = stats["opencv_lab_mean"]
+            lab_median = stats["opencv_lab_median"]
+
+            results.append({
+                "image": img_name,
+
+                "rgb_mean_r": rgb_mean[0],
+                "rgb_mean_g": rgb_mean[1],
+                "rgb_mean_b": rgb_mean[2],
+
+                "rgb_median_r": rgb_median[0],
+                "rgb_median_g": rgb_median[1],
+                "rgb_median_b": rgb_median[2],
+
+                "opencv_lab_mean_l": lab_mean[0],
+                "opencv_lab_mean_a": lab_mean[1],
+                "opencv_lab_mean_b": lab_mean[2],
+
+                "opencv_lab_median_l": lab_median[0],
+                "opencv_lab_median_a": lab_median[1],
+                "opencv_lab_median_b": lab_median[2],
+            })
+
+            self.log_experiment(
+                experiment_id="004_patch_color_analysis",
+                title="Patch Color Analysis",
+                objective="Analyze the pixel-level color characteristics of extracted surrounding-skin patches.",
+                preprocessing=[
+                    "Hair removal using multiscale black-hat detection and inpainting",
+                    "Surrounding-skin patch extraction",
+                    "RGB mean and median calculation",
+                    "OpenCV LAB mean and median calculation",
+                ],
+                results=results,
+                observations=[
+                    "TODO",
+                ],
+                next_experiment="TODO",
+            )
+
+            logger.info(
+                f"{img_name}: "
+                f"RGB mean={rgb_mean.round(2)}, "
+                f"RGB median={rgb_median.round(2)}, "
+                f"OpenCV LAB mean={lab_mean.round(2)}"
+            )
 
 if __name__ == "__main__":
     ita = ItaInference("configs/config.yaml")
     ita.load_models()
-    ita.run_inference()
+    # ita.run_inference()
+    ita.run_patch_color_analysis()
