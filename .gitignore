@@ -29,6 +29,7 @@ data/raw/
 data/processed/
 data/cleaned/
 data/splits/
+data/validator/
 
 #  Model weights
 finetune_mskcc_blur0_lab/

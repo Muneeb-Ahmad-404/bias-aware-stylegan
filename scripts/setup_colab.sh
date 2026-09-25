@@ -12,8 +12,7 @@ echo "Configuring Git..."
 git config --global user.name "$GITHUB_USERNAME"
 git config --global user.email "$GITHUB_EMAIL"
 
-git remote set-url origin https://${GITHUB_TOKEN}@github.com/Muneeb-Ahmad-404/bias-aware-stylegan.git
-
+git remote set-url origin "https://${GITHUB_TOKEN}@github.com/Muneeb-Ahmad-404/bias-aware-stylegan.git"
 
 echo "Configuring DVC remote..."
 
@@ -27,7 +26,7 @@ mkdir -p data/raw
 mkdir -p data/processed
 mkdir -p data/cleaned
 mkdir -p data/splits
-
+mkdir -p data/validator
 
 echo "Verifying setup..."
 
