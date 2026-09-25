@@ -18,13 +18,9 @@ from cv2.typing import MatLike
 class ItaInference:
     def __init__(self, config_path):
         self.config = self._load_config(config_path)
-        self.path = Path(self.config["datasets"]["isic"]["image_dir"])
         logger.basicConfig(level=logger.INFO)
-        if not self.path.exists():
-            logger.error("The directory does not exist")
-            raise Exception("The directory does not exist")
-
         self.models = []
+        self.dir = None
 
     def _load_config(self, config_path):
         with open(config_path, "r") as file:
@@ -57,22 +53,18 @@ class ItaInference:
 
         self.models = fold_models
 
-    def load_images(self):
-        images = os.listdir(self.path)
+    def load_images(self, image_dir):
+        image_dir = Path(image_dir)
+
+        if not image_dir.exists():
+            raise FileNotFoundError(f"Image directory does not exist: {image_dir}")
+
+        images = os.listdir(image_dir)
         logger.info(f"Found {len(images)} images to process.")
 
-        # for testing
-        # images = [
-        #     "ISIC_9922133.jpg",
-        #     "ISIC_9922430.jpg",
-        #     "ISIC_9923018.jpg",
-        #     "ISIC_9886540.jpg",
-        #     "ISIC_9991451.jpg",
-        #     "ISIC_0068279.jpg",
-        # ]
-
         for img_name in images:
-            img_path = self.path / img_name
+            img_path = image_dir / img_name
+
             if not img_path.exists():
                 logger.warning(f"Image not found: {img_path}")
                 continue
@@ -81,7 +73,7 @@ class ItaInference:
 
             if img_bgr is not None:
                 yield img_name, img_bgr
-
+                
     def remove_hair_multiscale(self, img_bgr: MatLike) -> MatLike:
         h, w = img_bgr.shape[:2]
 
@@ -278,10 +270,14 @@ class ItaInference:
 
         return ita_bnd_kin
 
-    def run_inference(self):
+    def run_inference(self, image_dir):
         results = []
+        self.dir = image_dir
 
-        for img_name, img_bgr in self.load_images():
+        if not self.dir:
+            raise Exception("Directory not provided")
+
+        for img_name, img_bgr in self.load_images(image_dir):
             logger.info(f"Processing {img_name}...")
 
             hair_free_img = self.remove_hair_multiscale(img_bgr)
@@ -435,10 +431,10 @@ class ItaInference:
             "opencv_lab_median": lab_median,
         }
     
-    def run_patch_color_analysis(self):
+    def run_patch_color_analysis(self, dir):
         results = []
-
-        for img_name, img_bgr in self.load_images():
+        self.dir = dir
+        for img_name, img_bgr in self.load_images(self.dir):
             logger.info(f"Analyzing {img_name}...")
 
             hair_free_img = self.remove_hair_multiscale(img_bgr)
@@ -475,22 +471,22 @@ class ItaInference:
                 "opencv_lab_median_b": lab_median[2],
             })
 
-            self.log_experiment(
-                experiment_id="004_patch_color_analysis",
-                title="Patch Color Analysis",
-                objective="Analyze the pixel-level color characteristics of extracted surrounding-skin patches.",
-                preprocessing=[
-                    "Hair removal using multiscale black-hat detection and inpainting",
-                    "Surrounding-skin patch extraction",
-                    "RGB mean and median calculation",
-                    "OpenCV LAB mean and median calculation",
-                ],
-                results=results,
-                observations=[
-                    "TODO",
-                ],
-                next_experiment="TODO",
-            )
+            # self.log_experiment(
+            #     experiment_id="004_patch_color_analysis",
+            #     title="Patch Color Analysis",
+            #     objective="Analyze the pixel-level color characteristics of extracted surrounding-skin patches.",
+            #     preprocessing=[
+            #         "Hair removal using multiscale black-hat detection and inpainting",
+            #         "Surrounding-skin patch extraction",
+            #         "RGB mean and median calculation",
+            #         "OpenCV LAB mean and median calculation",
+            #     ],
+            #     results=results,
+            #     observations=[
+            #         "TODO",
+            #     ],
+            #     next_experiment="TODO",
+            # )
 
             logger.info(
                 f"{img_name}: "
@@ -501,6 +497,7 @@ class ItaInference:
 
 if __name__ == "__main__":
     ita = ItaInference("configs/config.yaml")
+    path = ita.config["datasets"]["isic"]["image_dir"]
     ita.load_models()
-    # ita.run_inference()
-    ita.run_patch_color_analysis()
+    # ita.run_inference(path)
+    ita.run_patch_color_analysis(path)

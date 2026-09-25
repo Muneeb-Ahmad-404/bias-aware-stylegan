@@ -1,7 +1,6 @@
 import logging as logger
 from pathlib import Path
 
-import cv2 as cv
 import numpy as np
 import pandas as pd
 from scipy.stats import pearsonr, spearmanr
@@ -87,34 +86,16 @@ def validate_mskcc():
 
     ita = ItaInference(MODEL_CONFIG)
     ita.load_models()
-
-    # ---------------------------------------------------------
-    # Find images
-    # ---------------------------------------------------------
-
-    images = sorted(
-        p
-        for p in IMAGE_DIR.iterdir()
-        if p.is_file()
-        and p.suffix.lower()
-        in {".jpg", ".jpeg", ".png"}
-    )
-
-    logger.info(
-        "Found %d images in %s",
-        len(images),
-        IMAGE_DIR,
-    )
-
-    results = []
-
+  
     # ---------------------------------------------------------
     # Run E1 / E2 / E3
     # ---------------------------------------------------------
 
-    for image_path in images:
+    results = []
 
-        isic_id = image_path.stem
+    for img_name, img_bgr in ita.load_images(IMAGE_DIR):
+
+        isic_id = Path(img_name).stem
 
         if isic_id not in df.index:
             logger.warning(
@@ -126,18 +107,7 @@ def validate_mskcc():
         row = df.loc[isic_id]
 
         try:
-            img_bgr = cv.imread(str(image_path))
-
-            if img_bgr is None:
-                logger.warning(
-                    "%s: could not read image",
-                    isic_id,
-                )
-                continue
-
-            reference_ita = float(
-                row["average_ita"]
-            )
+            reference_ita = float(row["average_ita"])
 
             result = {
                 "isic_id": isic_id,
@@ -145,25 +115,14 @@ def validate_mskcc():
             }
 
             # Preserve useful metadata if available
-            for column in [
-                "type",
-                "anatomic_site",
-            ]:
+            for column in ["type", "anatomic_site"]:
                 if column in row.index:
                     result[column] = row[column]
 
-            # =================================================
             # E1: Raw image
-            # =================================================
-
             try:
-                l, a, b = ita.get_prediction(
-                    img_bgr
-                )
-
-                predicted_ita = ita.calculate_ita(
-                    l, b
-                )
+                l, a, b = ita.get_prediction(img_bgr)
+                predicted_ita = ita.calculate_ita(l, b)
 
                 result.update({
                     "e1_l": l,
@@ -173,29 +132,16 @@ def validate_mskcc():
                 })
 
             except Exception:
-                logger.exception(
-                    "%s: E1 failed",
-                    isic_id,
-                )
+                logger.exception("%s: E1 failed", isic_id)
 
-            # =================================================
             # E2: Multiscale hair removal
-            # =================================================
+            hair_free_img = None
 
             try:
-                hair_free_img = (
-                    ita.remove_hair_multiscale(
-                        img_bgr
-                    )
-                )
+                hair_free_img = ita.remove_hair_multiscale(img_bgr)
 
-                l, a, b = ita.get_prediction(
-                    hair_free_img
-                )
-
-                predicted_ita = ita.calculate_ita(
-                    l, b
-                )
+                l, a, b = ita.get_prediction(hair_free_img)
+                predicted_ita = ita.calculate_ita(l, b)
 
                 result.update({
                     "e2_l": l,
@@ -205,16 +151,15 @@ def validate_mskcc():
                 })
 
             except Exception:
-                logger.exception(
-                    "%s: E2 failed",
-                    isic_id,
-                )
+                logger.exception("%s: E2 failed", isic_id)
 
-            # =================================================
             # E3: Hair removal + clean patch
-            # =================================================
-
             try:
+                if hair_free_img is None:
+                    raise RuntimeError(
+                        "Hair removal failed; cannot run E3"
+                    )
+
                 clean_patch = ita.extract_clean_patch(
                     hair_free_img
                 )
@@ -224,13 +169,8 @@ def validate_mskcc():
                         "Could not extract clean patch"
                     )
 
-                l, a, b = ita.get_prediction(
-                    clean_patch
-                )
-
-                predicted_ita = ita.calculate_ita(
-                    l, b
-                )
+                l, a, b = ita.get_prediction(clean_patch)
+                predicted_ita = ita.calculate_ita(l, b)
 
                 result.update({
                     "e3_l": l,
@@ -240,10 +180,7 @@ def validate_mskcc():
                 })
 
             except Exception:
-                logger.exception(
-                    "%s: E3 failed",
-                    isic_id,
-                )
+                logger.exception("%s: E3 failed", isic_id)
 
             results.append(result)
 
@@ -355,9 +292,6 @@ def validate_mskcc():
 
     print("\nMSKCC ITA Validation")
     print("====================")
-    print(
-        f"Images found       : {len(images)}"
-    )
     print(
         f"Images evaluated   : {len(results_df)}"
     )
