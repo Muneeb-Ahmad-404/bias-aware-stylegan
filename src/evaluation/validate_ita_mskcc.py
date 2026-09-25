@@ -2,8 +2,8 @@ import logging as logger
 from pathlib import Path
 
 import cv2 as cv
-import pandas as pd
 import numpy as np
+import pandas as pd
 from scipy.stats import pearsonr, spearmanr
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 
@@ -18,38 +18,107 @@ OUTPUT_PATH = Path(
     "reports/ita/mskcc_validation_results.csv"
 )
 
+SUMMARY_PATH = Path(
+    "reports/ita/mskcc_validation_summary.csv"
+)
+
+
+def calculate_metrics(y_true, y_pred):
+    """Calculate regression/agreement metrics."""
+
+    y_true = np.asarray(y_true)
+    y_pred = np.asarray(y_pred)
+
+    return {
+        "n": len(y_true),
+        "mae": mean_absolute_error(y_true, y_pred),
+        "rmse": np.sqrt(
+            mean_squared_error(y_true, y_pred)
+        ),
+        "pearson_r": pearsonr(
+            y_true, y_pred
+        ).statistic,
+        "spearman_rho": spearmanr(
+            y_true, y_pred
+        ).statistic,
+        "bias": np.mean(y_pred - y_true),
+        "std_error": np.std(
+            y_pred - y_true,
+            ddof=1,
+        ),
+    }
+
 
 def validate_mskcc():
-    # Load MSKCC colorimeter/ITA data
+    # ---------------------------------------------------------
+    # Load MSKCC reference data
+    # ---------------------------------------------------------
+
     df = pd.read_csv(CSV_PATH)
 
-    # Only rows with a colorimeter reference
-    df = df.dropna(subset=["average_ita"])
+    required_columns = {
+        "isic_id",
+        "average_ita",
+    }
 
-    # Index CSV by ISIC ID for fast lookup
+    missing = required_columns - set(df.columns)
+
+    if missing:
+        raise ValueError(
+            f"Missing required columns in {CSV_PATH}: {missing}"
+        )
+
+    # Only images with a colorimeter ITA reference
+    df = df.dropna(
+        subset=["average_ita"]
+    ).copy()
+
+    df["isic_id"] = df["isic_id"].astype(str)
     df = df.set_index("isic_id")
 
-    # Use your existing inference implementation
+    logger.info(
+        "MSKCC reference rows with ITA: %d",
+        len(df),
+    )
+
+    # ---------------------------------------------------------
+    # Load existing pretrained ITA model
+    # ---------------------------------------------------------
+
     ita = ItaInference(MODEL_CONFIG)
     ita.load_models()
 
+    # ---------------------------------------------------------
+    # Find images
+    # ---------------------------------------------------------
+
+    images = sorted(
+        p
+        for p in IMAGE_DIR.iterdir()
+        if p.is_file()
+        and p.suffix.lower()
+        in {".jpg", ".jpeg", ".png"}
+    )
+
+    logger.info(
+        "Found %d images in %s",
+        len(images),
+        IMAGE_DIR,
+    )
+
     results = []
 
-    images = sorted(IMAGE_DIR.glob("*"))
-
-    logger.info("Found %d downloaded images", len(images))
+    # ---------------------------------------------------------
+    # Run E1 / E2 / E3
+    # ---------------------------------------------------------
 
     for image_path in images:
 
-        # Example:
-        # ISIC_1234567.jpg -> ISIC_1234567
         isic_id = image_path.stem
 
-        # Check whether this downloaded image exists in
-        # the MSKCC ITA CSV
         if isic_id not in df.index:
             logger.warning(
-                "%s: not found in MSKCC ITA CSV",
+                "%s: not found in MSKCC reference CSV",
                 isic_id,
             )
             continue
@@ -66,89 +135,144 @@ def validate_mskcc():
                 )
                 continue
 
-            # ---- Existing inference pipeline ----
+            reference_ita = float(
+                row["average_ita"]
+            )
 
-            hair_free_img = ita.remove_hair_multiscale(img_bgr)
+            result = {
+                "isic_id": isic_id,
+                "reference_ita": reference_ita,
+            }
 
-            clean_patch = ita.extract_clean_patch(hair_free_img)
+            # Preserve useful metadata if available
+            for column in [
+                "type",
+                "anatomic_site",
+            ]:
+                if column in row.index:
+                    result[column] = row[column]
 
-            if clean_patch is None:
-                logger.warning(
-                    "%s: could not extract clean patch",
+            # =================================================
+            # E1: Raw image
+            # =================================================
+
+            try:
+                l, a, b = ita.get_prediction(
+                    img_bgr
+                )
+
+                predicted_ita = ita.calculate_ita(
+                    l, b
+                )
+
+                result.update({
+                    "e1_l": l,
+                    "e1_a": a,
+                    "e1_b": b,
+                    "e1_ita": predicted_ita,
+                })
+
+            except Exception:
+                logger.exception(
+                    "%s: E1 failed",
                     isic_id,
                 )
-                continue
 
-            l, a, b = ita.get_prediction(clean_patch)
+            # =================================================
+            # E2: Multiscale hair removal
+            # =================================================
 
-            predicted_ita = ita.calculate_ita(l, b)
+            try:
+                hair_free_img = (
+                    ita.remove_hair_multiscale(
+                        img_bgr
+                    )
+                )
 
-            # -------------------------------------
+                l, a, b = ita.get_prediction(
+                    hair_free_img
+                )
 
-            reference_ita = float(row["average_ita"])
+                predicted_ita = ita.calculate_ita(
+                    l, b
+                )
 
-            results.append({
-                "isic_id": isic_id,
-                "type": row["type"],
-                "anatomic_site": row["anatomic_site"],
-                "predicted_l": l,
-                "predicted_a": a,
-                "predicted_b": b,
-                "predicted_ita": predicted_ita,
-                "reference_ita": reference_ita,
-                "error": predicted_ita - reference_ita,
-                "absolute_error": abs(
-                    predicted_ita - reference_ita
-                ),
-            })
+                result.update({
+                    "e2_l": l,
+                    "e2_a": a,
+                    "e2_b": b,
+                    "e2_ita": predicted_ita,
+                })
+
+            except Exception:
+                logger.exception(
+                    "%s: E2 failed",
+                    isic_id,
+                )
+
+            # =================================================
+            # E3: Hair removal + clean patch
+            # =================================================
+
+            try:
+                clean_patch = ita.extract_clean_patch(
+                    hair_free_img
+                )
+
+                if clean_patch is None:
+                    raise RuntimeError(
+                        "Could not extract clean patch"
+                    )
+
+                l, a, b = ita.get_prediction(
+                    clean_patch
+                )
+
+                predicted_ita = ita.calculate_ita(
+                    l, b
+                )
+
+                result.update({
+                    "e3_l": l,
+                    "e3_a": a,
+                    "e3_b": b,
+                    "e3_ita": predicted_ita,
+                })
+
+            except Exception:
+                logger.exception(
+                    "%s: E3 failed",
+                    isic_id,
+                )
+
+            results.append(result)
 
             logger.info(
-                "%s: predicted ITA=%.2f, "
-                "reference ITA=%.2f",
+                "%s | reference=%.2f | E1=%.2f | "
+                "E2=%.2f | E3=%.2f",
                 isic_id,
-                predicted_ita,
                 reference_ita,
+                result.get("e1_ita", np.nan),
+                result.get("e2_ita", np.nan),
+                result.get("e3_ita", np.nan),
             )
 
-        except Exception as e:
+        except Exception:
             logger.exception(
-                "%s: validation failed: %s",
+                "%s: validation failed",
                 isic_id,
-                e,
             )
+
+    # ---------------------------------------------------------
+    # Save per-image results
+    # ---------------------------------------------------------
 
     results_df = pd.DataFrame(results)
 
     if results_df.empty:
         raise RuntimeError(
-            "No downloaded images could be validated."
+            "No images could be validated."
         )
-
-    y_true = results_df["reference_ita"].to_numpy()
-    y_pred = results_df["predicted_ita"].to_numpy()
-
-    mae = mean_absolute_error(y_true, y_pred)
-    rmse = np.sqrt(
-        mean_squared_error(y_true, y_pred)
-    )
-
-    pearson = pearsonr(
-        y_true,
-        y_pred,
-    ).statistic
-
-    spearman = spearmanr(
-        y_true,
-        y_pred,
-    ).statistic
-
-    print("\nMSKCC ITA Validation")
-    print("====================")
-    print(f"Images evaluated : {len(results_df)}")
-    print(f"MAE              : {mae:.3f}")
-    print(f"RMSE             : {rmse:.3f}")
-    print(f"Pearson r        : {pearson:.3f}")
-    print(f"Spearman rho     : {spearman:.3f}")
 
     OUTPUT_PATH.parent.mkdir(
         parents=True,
@@ -160,8 +284,98 @@ def validate_mskcc():
         index=False,
     )
 
+    # ---------------------------------------------------------
+    # Calculate summary metrics
+    # ---------------------------------------------------------
+
+    summary = []
+
+    for experiment in [
+        "e1",
+        "e2",
+        "e3",
+    ]:
+
+        prediction_column = f"{experiment}_ita"
+
+        valid = results_df.dropna(
+            subset=[
+                "reference_ita",
+                prediction_column,
+            ]
+        )
+
+        if valid.empty:
+            logger.warning(
+                "%s: no valid predictions",
+                experiment.upper(),
+            )
+            continue
+
+        y_true = valid[
+            "reference_ita"
+        ].to_numpy()
+
+        y_pred = valid[
+            prediction_column
+        ].to_numpy()
+
+        metrics = calculate_metrics(
+            y_true,
+            y_pred,
+        )
+
+        metrics["experiment"] = experiment.upper()
+
+        summary.append(metrics)
+
+    summary_df = pd.DataFrame(summary)
+
+    summary_df = summary_df[
+        [
+            "experiment",
+            "n",
+            "mae",
+            "rmse",
+            "pearson_r",
+            "spearman_rho",
+            "bias",
+            "std_error",
+        ]
+    ]
+
+    summary_df.to_csv(
+        SUMMARY_PATH,
+        index=False,
+    )
+
+    # ---------------------------------------------------------
+    # Print summary
+    # ---------------------------------------------------------
+
+    print("\nMSKCC ITA Validation")
+    print("====================")
     print(
-        f"\nDetailed results saved to: {OUTPUT_PATH}"
+        f"Images found       : {len(images)}"
+    )
+    print(
+        f"Images evaluated   : {len(results_df)}"
+    )
+
+    print("\nResults:")
+    print(
+        summary_df.to_string(
+            index=False,
+            float_format=lambda x: f"{x:.3f}",
+        )
+    )
+
+    print(
+        f"\nDetailed results: {OUTPUT_PATH}"
+    )
+
+    print(
+        f"Summary results : {SUMMARY_PATH}"
     )
 
 
