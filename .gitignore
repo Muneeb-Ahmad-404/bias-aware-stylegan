@@ -16,6 +16,7 @@ wheels/
 # Jupyter / Colab
 .ipynb_checkpoints/
 *.ipynb
+!notebooks/*.ipynb
 
 # Virtual environments
 .venv/
