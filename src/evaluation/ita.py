@@ -80,24 +80,23 @@ def _extract_background_skin_mask(rgb: np.ndarray, lab: np.ndarray) -> np.ndarra
     l_star = lab[..., 0]
 
     # Step 1: exclude black dermoscope frame & specular glare
-    valid = (l_star >= 12.0) & (l_star <= 96.0) & (rgb.max(axis=-1) >= 20)
+    yy, xx = np.ogrid[:h, :w]
+    cy, cx = h / 2.0, w / 2.0
+    dist_norm = np.sqrt(((yy - cy) / (h / 2.0)) ** 2 + ((xx - cx) / (w / 2.0)) ** 2)
+    valid = (l_star >= 15.0) & (l_star <= 96.0) & (rgb.max(axis=-1) >= 25) & (dist_norm <= 0.92)
+    if valid.sum() < 100:
+        valid = (l_star >= 12.0) & (l_star <= 96.0) & (rgb.max(axis=-1) >= 20)
     if valid.sum() < 100:
         return valid
 
-    # Step 2: Otsu threshold on L* of valid pixels to separate dark lesion from skin
+    # Step 2: Otsu threshold on L* of valid pixels to separate dark lesion/vignette from skin
     valid_l_u8 = np.clip(l_star[valid] * 2.55, 0, 255).astype(np.uint8)
     otsu_thresh_u8, _ = cv2.threshold(
         valid_l_u8, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU
     )
     otsu_l = otsu_thresh_u8 / 2.55
 
-    # Prefer outer border ring + pixels above Otsu threshold (healthy surrounding skin)
-    yy, xx = np.ogrid[:h, :w]
-    cy, cx = h / 2.0, w / 2.0
-    dist_norm = np.sqrt(((yy - cy) / (h / 2.0)) ** 2 + ((xx - cx) / (w / 2.0)) ** 2)
-    outer_ring = dist_norm >= 0.65
-
-    skin_mask = valid & ((l_star >= otsu_l) | outer_ring)
+    skin_mask = valid & (l_star >= otsu_l)
 
     # Fallback if mask is too small
     if skin_mask.sum() < 0.05 * h * w:
@@ -133,11 +132,14 @@ def compute_image_ita(image_path: str | Path) -> ITAResult:
     l_med = float(np.median(l_vals))
     b_med = float(np.median(b_vals))
 
-    # Guard against b* == 0
-    if abs(b_med) < 1e-6:
-        b_med = 1e-6 if b_med >= 0 else -1e-6
-
-    ita_deg = math.degrees(math.atan((l_med - 50.0) / b_med))
+    # Guard against cool/pink dermoscope lighting (b* <= 0 on light skin) and b* == 0
+    if b_med <= 1e-6:
+        if l_med >= 50.0:
+            ita_deg = 90.0
+        else:
+            ita_deg = -90.0
+    else:
+        ita_deg = math.degrees(math.atan((l_med - 50.0) / b_med))
 
     return ITAResult(
         filename=path.name,
