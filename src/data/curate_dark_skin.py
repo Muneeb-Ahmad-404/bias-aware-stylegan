@@ -16,7 +16,28 @@ from pathlib import Path
 import pandas as pd
 from PIL import Image
 
-from src.evaluation.ita import ITA_BINS, compute_image_ita
+from src.evaluation.ita import IMAGE_EXTENSIONS, ITA_BINS, compute_image_ita
+
+
+def _build_raw_image_index(raw_dir: Path = Path("data/raw")) -> dict[str, Path]:
+    """Index image files under data/raw by stem so mismatched metadata paths still resolve."""
+    index: dict[str, Path] = {}
+    if not raw_dir.exists():
+        return index
+    for p in raw_dir.rglob("*"):
+        if p.is_file() and p.suffix.lower() in IMAGE_EXTENSIONS:
+            index.setdefault(p.stem, p)
+    return index
+
+
+def _resolve_image_path(row: pd.Series, raw_index: dict[str, Path]) -> Path | None:
+    p = Path(str(row["image_path"]))
+    if p.exists():
+        return p
+    for key in (p.stem, str(row["image_id"])):
+        if key in raw_index:
+            return raw_index[key]
+    return None
 
 
 def _infer_source(image_path: str) -> str:
@@ -93,12 +114,13 @@ def curate_dark_skin(
         raise FileNotFoundError(f"Metadata file not found: {meta_path}")
 
     df_meta = pd.read_csv(meta_path)
+    raw_index = _build_raw_image_index()
     records = []
     missing_count = 0
 
     for _, row in df_meta.iterrows():
-        img_path = Path(row["image_path"])
-        if not img_path.exists():
+        img_path = _resolve_image_path(row, raw_index)
+        if img_path is None:
             missing_count += 1
             continue
 
@@ -108,7 +130,7 @@ def curate_dark_skin(
             {
                 "image_id": row["image_id"],
                 "source": _infer_source(str(row["image_path"])),
-                "image_path": str(row["image_path"]),
+                "image_path": str(img_path),
                 "fitzpatrick_label": None if pd.isna(fitz_val) else int(fitz_val),
                 "ita_deg": ita_res.ita_deg,
                 "skin_tone_group": ita_res.skin_tone_group,
@@ -144,9 +166,11 @@ def curate_dark_skin(
 
     tag = str(int(ita_threshold))
     isic_dir = proc_path / f"finetune_isic_ita{tag}"
+    fitz_dir = proc_path / f"finetune_fitzpatrick_ita{tag}"
     combined_dir = proc_path / f"finetune_combined_ita{tag}"
 
     n_isic_exported = _export_subset(isic_dark, isic_dir)
+    n_fitz_exported = _export_subset(fitz_dark, fitz_dir)
     n_combined_exported = _export_subset(combined_dark, combined_dir)
 
     summary = {
@@ -159,6 +183,10 @@ def curate_dark_skin(
             "isic_only": {
                 "dir": str(isic_dir),
                 "count": int(n_isic_exported),
+            },
+            "fitzpatrick_only": {
+                "dir": str(fitz_dir),
+                "count": int(n_fitz_exported),
             },
             "combined": {
                 "dir": str(combined_dir),
